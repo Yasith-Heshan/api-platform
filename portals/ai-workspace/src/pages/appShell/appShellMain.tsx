@@ -331,10 +331,6 @@ export default function AppLayout(): JSX.Element {
       }
       if (tertiarySegment === 'insights') {
         shellActions.setActiveMenuItem('insights');
-        return;
-      }
-      if (tertiarySegment === 'settings') {
-        shellActions.setActiveMenuItem('settings');
       }
       return;
     }

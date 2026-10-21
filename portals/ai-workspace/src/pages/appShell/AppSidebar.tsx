@@ -141,9 +141,6 @@ export default function AppSidebar({
   const insightsPath = currentProject
     ? buildProjectPath(currentOrganization, currentProject, '/insights')
     : orgInsightsPath;
-  const settingsPath = currentProject
-    ? buildProjectPath(currentOrganization, currentProject, '/settings')
-    : orgSettingsPath;
   const extensionPath = (path: string) => currentProject
     ? buildProjectPath(currentOrganization, currentProject, `/${path}`)
     : buildOrgPath(currentOrganization, `/${path}`);
@@ -337,8 +334,9 @@ export default function AppSidebar({
 
       <Sidebar.Footer>
         <Sidebar.Category>
-          {hasPermission(SCOPES.LLM_TEMPLATE_MANAGE) && (
-            <NavLink to={settingsPath} style={navLinkStyle}>
+          {/* Settings is organization-level only, so it is hidden inside a project. */}
+          {!currentProject && hasPermission(SCOPES.LLM_TEMPLATE_MANAGE) && (
+            <NavLink to={orgSettingsPath} style={navLinkStyle}>
               <Sidebar.Item id="settings">
                 <Sidebar.ItemIcon>
                   <Settings size={20} />

@@ -798,6 +798,8 @@ function WorkspaceRoutes({ extensions = [] }: AppProps) {
                 </WithPageBoundary>
               }
             />
+            {/* Organization-scoped only — there is no project-level copy, and
+                the sidebar hides Settings inside a project. */}
             <Route path="settings" element={<ServiceProviderLayout />}>
               <Route element={<Settings />}>
                 <Route index element={<SettingsIndexRedirect />} />
@@ -1085,18 +1087,6 @@ function WorkspaceRoutes({ extensions = [] }: AppProps) {
                   </WithPageBoundary>
                 }
               />
-              <Route path="settings" element={<ServiceProviderLayout />}>
-                <Route element={<Settings />}>
-                  <Route
-                    index
-                    element={
-                      <WithPageBoundary>
-                        <ProviderTemplatesList />
-                      </WithPageBoundary>
-                    }
-                  />
-                </Route>
-              </Route>
               {extensionRoutes}
             </Route>
           </Route>
