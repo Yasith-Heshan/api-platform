@@ -1,0 +1,819 @@
+openapi: 3.0.3
+info:
+  title: Ollama OpenAI-compatible API
+  description: |-
+    The OpenAI-compatible API that Ollama serves under `/v1`. Clients built for the OpenAI API,
+    including the official OpenAI SDKs, can use it to run models hosted on an Ollama server.
+
+    **Key Features:**
+    - **Chat completions:** Multi-turn chat with streaming, JSON mode, vision (base64 images), tools and reasoning control.
+    - **Completions:** Text completion for a single prompt.
+    - **Embeddings:** Vector embeddings for a string or an array of strings.
+    - **Responses:** The stateless form of the OpenAI Responses API (Ollama v0.13.3 and later).
+    - **Models:** List the models on the server, or look one up.
+
+    Usage is reported in OpenAI's format: `usage.prompt_tokens`, `usage.completion_tokens` and
+    `usage.total_tokens`, or `input_tokens` and `output_tokens` on `/responses`. A streamed request
+    reports usage in its final chunk when `stream_options.include_usage` is `true`.
+
+    A local Ollama server ignores the API key. Ollama's cloud API (`https://ollama.com/v1`) requires one,
+    sent as a bearer token.
+
+    Ollama publishes an OpenAPI document for its native `/api` endpoints only. This document describes
+    the `/v1` endpoints, following https://docs.ollama.com/api/openai-compatibility.
+  version: "1.0.0"
+  x-marketplace-tags:
+    - name: AI
+      description: AI and LLM APIs
+servers:
+  - url: http://localhost:11434/v1
+    description: A local Ollama server
+  - url: https://ollama.com/v1
+    description: Ollama's cloud API
+tags:
+  - name: Chat
+    description: Generate the next message in a conversation.
+  - name: Completions
+    description: Complete a text prompt.
+  - name: Embeddings
+    description: Turn text into vectors.
+  - name: Responses
+    description: Generate a response in the OpenAI Responses API format.
+  - name: Models
+    description: List and look up the models on the server.
+paths:
+  /chat/completions:
+    post:
+      operationId: createChatCompletion
+      tags:
+        - Chat
+      summary: Create a chat completion
+      description: |-
+        Generates the next message in a conversation. Set `stream` to `true` to receive the reply as
+        server-sent events, one `chat.completion.chunk` per event.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChatCompletionRequest'
+      responses:
+        '200':
+          description: The generated message, or a stream of chunks when `stream` is `true`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateChatCompletionResponse'
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/CreateChatCompletionChunk'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /completions:
+    post:
+      operationId: createCompletion
+      tags:
+        - Completions
+      summary: Create a completion
+      description: |-
+        Completes a single text prompt. `prompt` must be a string. Set `stream` to `true` to receive the
+        completion as server-sent events.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCompletionRequest'
+      responses:
+        '200':
+          description: The completion, or a stream of partial completions when `stream` is `true`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCompletionResponse'
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/CreateCompletionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /embeddings:
+    post:
+      operationId: createEmbedding
+      tags:
+        - Embeddings
+      summary: Create embeddings
+      description: Returns an embedding vector for each input string.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEmbeddingRequest'
+      responses:
+        '200':
+          description: One embedding per input, in input order.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateEmbeddingResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /responses:
+    post:
+      operationId: createResponse
+      tags:
+        - Responses
+      summary: Create a model response
+      description: |-
+        Generates a response in the OpenAI Responses API format. Ollama supports the stateless form only,
+        so `previous_response_id` and `conversation` aren't available. Set `stream` to `true` to receive
+        server-sent events; the final `response.completed` event carries the whole response, including
+        `usage`. Available in Ollama v0.13.3 and later.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResponseRequest'
+      responses:
+        '200':
+          description: The response, or a stream of response events when `stream` is `true`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/ResponseStreamEvent'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /models:
+    get:
+      operationId: listModels
+      tags:
+        - Models
+      summary: List models
+      description: Lists the models available on the Ollama server.
+      responses:
+        '200':
+          description: The models on the server.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListModelsResponse'
+        '500':
+          $ref: '#/components/responses/ServerError'
+  /models/{model}:
+    get:
+      operationId: retrieveModel
+      tags:
+        - Models
+      summary: Retrieve a model
+      description: Returns one model from the Ollama server.
+      parameters:
+        - name: model
+          in: path
+          required: true
+          description: The model name, such as `llama3.2` or `qwen3:8b`.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The model.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: An Ollama API key. A local server ignores it; Ollama's cloud API requires it.
+  responses:
+    BadRequest:
+      description: The request is invalid, for example malformed JSON or a missing required field.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: The requested model isn't on the server. Pull it first with `ollama pull <model>`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ServerError:
+      description: The server failed to process the request.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    CreateChatCompletionRequest:
+      type: object
+      required:
+        - model
+        - messages
+      properties:
+        model:
+          type: string
+          description: The model to use, such as `llama3.2`.
+        messages:
+          type: array
+          description: The conversation so far.
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        frequency_penalty:
+          type: number
+        presence_penalty:
+          type: number
+        response_format:
+          $ref: '#/components/schemas/ResponseFormat'
+        seed:
+          type: integer
+          description: Makes sampling reproducible for the same request.
+        stop:
+          $ref: '#/components/schemas/StopSequences'
+        stream:
+          type: boolean
+          default: false
+        stream_options:
+          $ref: '#/components/schemas/StreamOptions'
+        temperature:
+          type: number
+        top_p:
+          type: number
+        max_tokens:
+          type: integer
+          description: The maximum number of tokens to generate.
+        tools:
+          type: array
+          description: Functions the model may call.
+          items:
+            $ref: '#/components/schemas/Tool'
+        reasoning_effort:
+          type: string
+          description: |-
+            How much a thinking model reasons before answering, such as `low`, `medium` or `high`.
+            The accepted values are model-defined; an unsupported value falls back to the model's default.
+        reasoning:
+          type: object
+          properties:
+            effort:
+              type: string
+              description: The same setting as `reasoning_effort`.
+      example:
+        model: llama3.2
+        messages:
+          - role: user
+            content: Say hello!
+    ChatMessage:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          description: Who sent the message, such as `system`, `user`, `assistant` or `tool`.
+        content:
+          nullable: true
+          description: The message text, or an array of text and image parts.
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                $ref: '#/components/schemas/ContentPart'
+        name:
+          type: string
+          description: An optional name for the sender.
+        tool_calls:
+          type: array
+          description: Calls the assistant made, on an `assistant` message.
+          items:
+            $ref: '#/components/schemas/ToolCall'
+        tool_call_id:
+          type: string
+          description: The call this message answers, on a `tool` message.
+    ContentPart:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - text
+            - image_url
+        text:
+          type: string
+          description: The text, when `type` is `text`.
+        image_url:
+          type: object
+          description: The image, when `type` is `image_url`.
+          required:
+            - url
+          properties:
+            url:
+              type: string
+              description: A base64 data URL, such as `data:image/png;base64,...`. Remote image URLs aren't supported.
+    ResponseFormat:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - text
+            - json_object
+            - json_schema
+        json_schema:
+          type: object
+          description: |-
+            The JSON Schema the reply must follow, when `type` is `json_schema`. Ollama reads only `schema`;
+            other fields, such as `name` and `strict`, are accepted and ignored.
+          properties:
+            schema:
+              type: object
+              additionalProperties: true
+    StopSequences:
+      description: Sequences where generation stops.
+      oneOf:
+        - type: string
+        - type: array
+          items:
+            type: string
+    StreamOptions:
+      type: object
+      properties:
+        include_usage:
+          type: boolean
+          description: Adds a final chunk that carries `usage` for the whole request.
+    Tool:
+      type: object
+      required:
+        - type
+        - function
+      properties:
+        type:
+          type: string
+          enum:
+            - function
+        function:
+          $ref: '#/components/schemas/FunctionDefinition'
+    FunctionDefinition:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          description: The function's arguments, as a JSON Schema object.
+          additionalProperties: true
+    ToolCall:
+      type: object
+      properties:
+        id:
+          type: string
+        index:
+          type: integer
+          description: The call's position, in streamed chunks.
+        type:
+          type: string
+          enum:
+            - function
+        function:
+          type: object
+          properties:
+            name:
+              type: string
+            arguments:
+              type: string
+              description: The arguments, as a JSON string.
+    CreateChatCompletionResponse:
+      type: object
+      required:
+        - id
+        - object
+        - created
+        - model
+        - choices
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum:
+            - chat.completion
+        created:
+          type: integer
+          description: When the completion was created, as a Unix timestamp in seconds.
+        model:
+          type: string
+        system_fingerprint:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                $ref: '#/components/schemas/AssistantMessage'
+              finish_reason:
+                type: string
+                nullable: true
+                description: Why generation stopped, such as `stop`, `length` or `tool_calls`.
+        usage:
+          $ref: '#/components/schemas/Usage'
+    CreateChatCompletionChunk:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum:
+            - chat.completion.chunk
+        created:
+          type: integer
+        model:
+          type: string
+        system_fingerprint:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              delta:
+                $ref: '#/components/schemas/AssistantMessage'
+              finish_reason:
+                type: string
+                nullable: true
+        usage:
+          $ref: '#/components/schemas/Usage'
+    AssistantMessage:
+      type: object
+      properties:
+        role:
+          type: string
+        content:
+          type: string
+          nullable: true
+        reasoning:
+          type: string
+          description: The model's reasoning, from thinking models.
+        tool_calls:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolCall'
+    Usage:
+      type: object
+      required:
+        - prompt_tokens
+        - completion_tokens
+        - total_tokens
+      properties:
+        prompt_tokens:
+          type: integer
+        completion_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        prompt_tokens_details:
+          type: object
+          properties:
+            cached_tokens:
+              type: integer
+    CreateCompletionRequest:
+      type: object
+      required:
+        - model
+        - prompt
+      properties:
+        model:
+          type: string
+          description: The model to use, such as `llama3.2`.
+        prompt:
+          type: string
+        suffix:
+          type: string
+          description: Text that follows the completion.
+        frequency_penalty:
+          type: number
+        presence_penalty:
+          type: number
+        seed:
+          type: integer
+        stop:
+          $ref: '#/components/schemas/StopSequences'
+        stream:
+          type: boolean
+          default: false
+        stream_options:
+          $ref: '#/components/schemas/StreamOptions'
+        temperature:
+          type: number
+        top_p:
+          type: number
+        max_tokens:
+          type: integer
+      example:
+        model: llama3.2
+        prompt: Write a haiku about llamas.
+    CreateCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum:
+            - text_completion
+        created:
+          type: integer
+        model:
+          type: string
+        system_fingerprint:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              text:
+                type: string
+              finish_reason:
+                type: string
+                nullable: true
+        usage:
+          $ref: '#/components/schemas/Usage'
+    CreateEmbeddingRequest:
+      type: object
+      required:
+        - model
+        - input
+      properties:
+        model:
+          type: string
+          description: An embedding model, such as `nomic-embed-text`.
+        input:
+          description: The text to embed. Token arrays aren't supported.
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: string
+        encoding_format:
+          type: string
+          enum:
+            - float
+            - base64
+          default: float
+        dimensions:
+          type: integer
+          description: The number of dimensions to return, for models that support it.
+      example:
+        model: nomic-embed-text
+        input: Why is the sky blue?
+    CreateEmbeddingResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          enum:
+            - list
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              object:
+                type: string
+                enum:
+                  - embedding
+              index:
+                type: integer
+              embedding:
+                description: The vector, or a base64 string when `encoding_format` is `base64`.
+                oneOf:
+                  - type: array
+                    items:
+                      type: number
+                  - type: string
+        model:
+          type: string
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+    CreateResponseRequest:
+      type: object
+      required:
+        - model
+        - input
+      properties:
+        model:
+          type: string
+          description: The model to use, such as `qwen3:8b`.
+        input:
+          description: The prompt, or an array of input items in the Responses API format.
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
+                additionalProperties: true
+        instructions:
+          type: string
+          description: A system message for this request.
+        tools:
+          type: array
+          description: Functions the model may call.
+          items:
+            $ref: '#/components/schemas/ResponseFunctionTool'
+        stream:
+          type: boolean
+          default: false
+        temperature:
+          type: number
+        top_p:
+          type: number
+        max_output_tokens:
+          type: integer
+        reasoning:
+          type: object
+          properties:
+            effort:
+              type: string
+              description: How much a thinking model reasons. The accepted values are model-defined.
+        think:
+          description: |-
+            An Ollama extension that turns thinking on or off for thinking models: `true`, `false`,
+            or a model-defined level.
+          nullable: true
+          oneOf:
+            - type: boolean
+            - type: string
+      example:
+        model: qwen3:8b
+        input: Write a short poem about the color blue.
+    ResponseFunctionTool:
+      type: object
+      required:
+        - type
+        - name
+      properties:
+        type:
+          type: string
+          enum:
+            - function
+        name:
+          type: string
+        description:
+          type: string
+        parameters:
+          type: object
+          description: The function's arguments, as a JSON Schema object.
+          additionalProperties: true
+    Response:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum:
+            - response
+        created_at:
+          type: integer
+        status:
+          type: string
+          description: The response status, such as `completed`.
+        model:
+          type: string
+        output:
+          type: array
+          description: Output items, such as messages, function calls and reasoning summaries.
+          items:
+            type: object
+            additionalProperties: true
+        usage:
+          $ref: '#/components/schemas/ResponseUsage'
+    ResponseUsage:
+      type: object
+      properties:
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        total_tokens:
+          type: integer
+        input_tokens_details:
+          type: object
+          properties:
+            cached_tokens:
+              type: integer
+              description: Prompt tokens reused from an earlier request.
+        output_tokens_details:
+          type: object
+          properties:
+            reasoning_tokens:
+              type: integer
+              description: Tokens a thinking model spent reasoning. Ollama currently always reports 0.
+    ResponseStreamEvent:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          description: The event type, such as `response.created`, `response.output_text.delta` or `response.completed`.
+        sequence_number:
+          type: integer
+        delta:
+          type: string
+          description: New text, on `response.output_text.delta` events.
+        response:
+          $ref: '#/components/schemas/Response'
+    ListModelsResponse:
+      type: object
+      properties:
+        object:
+          type: string
+          enum:
+            - list
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Model'
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The model name, such as `llama3.2:latest`.
+        object:
+          type: string
+          enum:
+            - model
+        created:
+          type: integer
+          description: When the model was last modified, as a Unix timestamp in seconds.
+        owned_by:
+          type: string
+          description: The Ollama username that owns the model, `library` by default.
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+            type:
+              type: string
+              description: The error category, such as `invalid_request_error`, `not_found_error` or `api_error`.
+            param:
+              type: string
+              nullable: true
+            code:
+              type: string
+              nullable: true
+security:
+  - BearerAuth: []
+  - {}
